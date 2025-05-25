@@ -78,6 +78,49 @@ class LocxSecugenPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, SGFing
   private var deviceID = 0
   private var imgWidth = 0
   private var imgHeight = 0
+  private var detectedDeviceName = "Unknown"
+  
+  // SecuGen device constants
+  companion object {
+    // Map of product IDs to friendly names for device identification
+    // This is used only for logging and information purposes
+    // The actual device detection is handled by the SecuGen SDK via SGFDxDeviceName.SG_DEV_AUTO
+    
+    // USB Product IDs for different models
+    private const val U20_PID = 0x0300
+    private const val U20A_PID = 0x0302
+    private const val U20AP_PID = 0x0303
+    private const val U10_PID = 0x0401
+    private const val U10A_PID = 0x0402
+    private const val U10AP_PID = 0x0403
+    private const val HAMSTER_PRO_PID = 0x0310
+    private const val HAMSTER_PRO_20_PID = 0x0318
+    private const val HAMSTER_PRO_DUO_PID = 0x0322
+    private const val HAMSTER_PRO_DUO_CL_PID = 0x0325
+    private const val U30_PID = 0x0501
+    private const val U30A_PID = 0x0502
+    private const val U30AP_PID = 0x0503
+    private const val HAMSTER_IV_PID = 0x0566
+    private const val HAMSTER_PRO_PLUS_PID = 0x0566
+    
+    // Map of product IDs to friendly names
+    private val deviceNames = mapOf(
+      U20_PID to "U20",
+      U20A_PID to "U20-A",
+      U20AP_PID to "U20-AP",
+      U10_PID to "U10",
+      U10A_PID to "U10-A",
+      U10AP_PID to "U10-AP",
+      HAMSTER_PRO_PID to "Hamster Pro",
+      HAMSTER_PRO_20_PID to "Hamster Pro 20",
+      HAMSTER_PRO_DUO_PID to "Hamster Pro Duo",
+      HAMSTER_PRO_DUO_CL_PID to "Hamster Pro Duo/CL",
+      U30_PID to "U30",
+      U30A_PID to "U30-A",
+      U30AP_PID to "U30-AP",
+      HAMSTER_IV_PID to "Hamster IV/Pro+"
+    )
+  }
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.locx.secugen.plugin/fingerprintReader")
@@ -237,6 +280,9 @@ class LocxSecugenPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, SGFing
         return
       }
       
+      // Identify the specific device model
+      identifyDeviceModel(usbDevice)
+      
       // Check for USB permission
       val hasPermission = sgfplib?.GetUsbManager()?.hasPermission(usbDevice) ?: false
       
@@ -291,6 +337,29 @@ class LocxSecugenPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, SGFing
 
     sgfplib?.SetLedOn(enable)
     result.success(null)
+  }
+
+  /**
+   * Identifies the specific SecuGen device model based on USB Vendor ID and Product ID
+   * Updates the detectedDeviceName property with the friendly name of the detected device
+   */
+  private fun identifyDeviceModel(usbDevice: UsbDevice) {
+    val vendorId = usbDevice.vendorId
+    val productId = usbDevice.productId
+    
+    // Log device details
+    Log.d(TAG, "Detected USB device - VID: 0x${vendorId.toString(16)}, PID: 0x${productId.toString(16)}")
+    
+    // Retrieve device name from the device info if available
+    if (deviceInfo != null) {
+      val deviceName = deviceInfo?.deviceName ?: "Unknown"
+      Log.d(TAG, "SecuGen SDK reports device: $deviceName")
+      detectedDeviceName = deviceName
+    } else {
+      // Get the friendly name from our map if we know the product ID
+      detectedDeviceName = deviceNames[productId] ?: "Unknown SecuGen device"
+      Log.d(TAG, "Identified device (by PID): $detectedDeviceName")
+    }
   }
 
   private fun enableSmartCapture(enable: Boolean, result: Result) {
